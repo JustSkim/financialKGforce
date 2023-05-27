@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<!-- viewport，移动端窗口的自适应大小 -->
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>医疗知识图谱</title>
+	<!-- 页面属性定义 -->
+	<meta name="description" content="" />
+	<meta name="keywords" content="" />
+	<meta name="author" content="" />
+	<link rel="shortcut icon" href="">
+
+    <script src="intervalTree.js"></script>
+
+	<script src="https://cdn.bootcss.com/jquery/2.1.4/jquery.min.js"></script>
+	<link href="https://cdn.bootcss.com/bootstrap/3.3.4/css/bootstrap.min.css" rel="stylesheet">
+	<script src="https://cdn.bootcss.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+	<script src="https://unpkg.com/topojson-client@3"></script>
+
+	<script src="https://unpkg.com/canvg@3.0.1/lib/umd.js"></script>
+	<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/canvg/3.0.7/umd.min.js"></script> -->
+	<!-- <script src="https://cdn.jsdelivr.net/npm/pdfkit@0.11.0/js/pdfkit.min.js"></script>
+	<script src="https://github.com/devongovett/blob-stream/releases/download/v0.1.3/blob-stream.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/svg-to-pdfkit@0.1.8/source.min.js"></script> -->
+
+	<!-- svg-exportJS prerequisite: canvg -->
+	<script src="https://unpkg.com/canvg@3.0.1/lib/umd.js"></script>
+	<!-- svg-exportJS plugin -->
+	<script src="https://sharonchoong.github.io/svg-exportJS/svg-export.min.js"></script>
+
+	<!-- 屏幕截图 -->
+	<script src="https://html2canvas.hertzen.com/dist/html2canvas.js"></script>
+
+	<link rel="stylesheet" type="text/css" href="css/graph.css" />
+</head>
+
+<body>
+
+	<!-- 绘制标题样式 -->
+	<h1 style="color:#fff;font-size:32px;margin-bottom:0px;text-align:center;margin-left:40px;">医疗知识图谱</h1>
+	<!-- 绘制知识图谱主图 ，注意宽和高 -->
+	<div style="text-align: center; position:relative;">
+		<!-- <svg width="2400" height="1800" x="100" y="100" style="margin-right:80px;margin-bottom:-40px;   " id="svg1">
+		</svg> -->
+		<svg width="1500" height="1500" x="100" y="100" style="margin-right:80px;margin-bottom:-40px;  " id="svg2">
+
+		</svg>
+
+		<!-- 绘制图例 -->
+        <!--
+            TODO
+            20230419 为了方便展示图形，将图例设置为不显示状态
+        -->
+		<div id="indicator"  style="visibility: hidden;">
+		</div>
+		<div id="LineIndicator" style="visibility: hidden;">
+		</div>
+		<!-- 绘制搜索框 -->
+        <!--
+            TODO
+            20230419 为了方便展示图形，将搜索框设置为不显示状态
+        -->
+		<div id="search1">
+			<input type="text" class="form-control"   style="visibility: hidden;">
+		</div>
+
+		<!-- 绘制搜索框 -->
+		<div id="search2">
+			<input type="text" class="form-control"   style="visibility: hidden;">
+		</div>
+
+		<!-- 绘制右边显示结果 -->
+		<div id="info">
+			<h4></h4>
+		</div>
+		<!-- 增加D3元素库 -->
+		<script src="d3-v6.6-alter/d3-alter_edge.js"></script>
+		<script type="text/javascript">
+			$(document).ready(function () {
+				//定义svg变量将布局svg1选出来
+
+
+
+
+
+				var svg2 = d3.select("#svg2")
+					.attr("width", 1500)
+					.attr("height", 1500)
+					.call(d3.zoom().on('zoom', event => {
+						svg2.attr('transform', event.transform);
+					}))
+					.append('g')
+					.attr("width", 1500)
+					.attr("height", 1500);
+
+				var width2 = svg2.attr("width"),
+					height2 = svg2.attr("height")
+				var width = svg2.attr("width"),
+					height = svg2.attr("height")
+
+				// var svg1 = d3.select("#svg1"),
+				// 	width = svg1.attr("width"),
+				// 	height = svg1.attr("height");
+
+
+				//定义name变量制作图标
+				var NodeLabels = ['Disease', 'Drug', 'ALias', 'Department', "Symptom", "Complication", "Part"];
+				var color = d3.scaleOrdinal()
+					.domain(NodeLabels)
+					.range(d3.schemeTableau10)
+				var colors = ['#556222', '#009ABB', '#556222', '#5E3032', "#999999", "#53284F", "#B96D12"];
+
+
+				//背景颜色设置 补充CSS样式设置字体布局
+				for (var i = 0; i < NodeLabels.length; i++) {
+					$('#indicator').append("<div><span style='background-color:" + d3.schemeTableau10[i] + "'></span>" + NodeLabels[i] + "</div>");
+				}
+				//定义line的name制作图例
+				var LinksType = ['HAS_DRUG', 'ALIAS_IS', 'DEPARTMENT_IS', 'HAS_SYMPTOM', "HAS_COMPLICATION", "PART_IS"];
+
+
+				//line图例颜色设置 补充CSS样式设置字体布局
+				for (var i = 0; i < LinksType.length; i++) { //i由1开始，Disease没有对应关系
+					$('#LineIndicator').append("<div><span style='background-color:" + d3.schemeTableau10[i + 1] + "'></span>" + LinksType[i] + "</div>");
+				}
+
+				//保存文件的组件
+				$('#indicator').on("click", function (d) {
+					// svgExport.downloadPng(document.getElementById("svg2"), "chart title name", {
+					// 	width: 1500,
+					// 	height: 1500,
+					// 	scale: 10,
+					// 	useCSS: true
+					// });
+
+						var a = document.body.appendChild(
+							document.createElement("a")
+						);
+						a.download = "export.html";
+						a.href = "data:text/html," + document.getElementById("svg2");
+					
+
+					// html2canvas(document.body).then(function (canvas) {
+					// 	// document.body.appendChild(canvas);
+					// 	var hret = canvas.toDataURL("image/png", 1.0)
+					// 	download(hret, "123.png");
+					// });
+				})
+
+				const download = (dataUrl, filename) => {
+					const link = document.createElement("a");
+					link.href = dataUrl;
+					link.download = filename;
+					link.click();
+				};
+
+				//利用d3.forceSimulation()定义关系图 包括设置边link、排斥电荷charge、关系图中心点
+				// var simulation1 = d3.forceSimulation()
+				// 	.force("link", d3.forceLink().id(d => {
+				// 		// console.log(d.id)
+				// 		return d.id;
+				// 	}
+				// 	))
+				// 	// .force("charge", d3.forceManyBody().strength(-100))
+				// 	.force("center", d3.forceCenter(width / 2, height / 2))
+				// 	.force("collision", d3.forceCollide(30))//碰撞检测
+
+				//利用d3.forceSimulation()定义关系图 包括设置边link、排斥电荷charge、关系图中心点
+
+
+
+				//图数据与结构
+				var graph1;
+				var graph2;
+				var nodes1 = []  //存放都第一个界面的节点
+				var links1 = []  // 存放第一个界面的关系
+				var nodes2 = []  //存放第二个界面的节点
+				var links2 = []  // 存放第二个界面的关系
+				var nodeSet1 = [] //存放去重之后第一个界面的nodes 的id
+				var linkSet1 = [] //存放去重之后第一个界面的links 的id
+				var nodeSet2 = [] //存放去重之后第二个界面的nodes 的id
+				var linkSet2 = [] //存放去重之后第二个界面的links 的id
+				var nodeset_3 = [] //存储所有独立id
+				var nodes1_map_by_cluster
+				var group1_map
+				var nodes2_map_by_id_2
+				var basemap,
+					baselink,
+					edgeBundle,
+					baseNode,
+					baseText,
+					voronoi;
+				// var dragging =false
+				//开始获取数据，使用d3.json读取
+				//数据中存在nan数据，待处理    
+
+				//d3.csv("financial_data/output_cluster2.csv").then(function (data1) {
+					//d3.json("financial_data/my-data-utf8-line-sorted.json").then(function (data2) {
+                d3.csv("financial_data/financial_cluster.csv").then(function (data1) {
+					d3.json("financial_data/searchResult_Allfund.json").then(function (data2) {
+
+						graph_1 = data1;
+						graph_2 = data2;
+
+						for (let item of graph_1) {		//数据处理，将scv中的字符转化为数值
+							item.id = parseInt(item.id)
+							item.cluster = parseInt(item.cluster)
+							nodeset_3.push(item.id)
+						}
+						console.log(nodeset_3)
+
+						group1_map = d3.index(graph_1, d => d.id)
+						console.log(group1_map)
+						graph_1_by_name = d3.group(graph_1, d => d.name)
+
+
+                        /*
+                        * 动态图可视化，需要针对nrm结构中的数据时间属性进行处理，
+                        * 因此在graph_2这个数据被使用前，手动对其中的数据进行部分删除即可
+                        */
+                        //graph_2 = jsonSliceBegintoEnd(graph_2, 20040101, 20050206)
+                        //graph_2 = jsonSliceTime(graph_2, 2010206)
+                        //#LineIndicator = jsonSliceTime(graph_2, 20160706)
+                        //graph_2 = jsonSliceTime(graph_2, 20190426)
+                        graph_2 = jsonSliceTime(graph_2, 20001131)
+
+						for (let item of graph_2) {
+
+							//修改data的格式
+							if ((nodeset_3.indexOf(item.n.identity) >= 0) && (nodeSet2.indexOf(item.n.identity) == -1) && (item.n.properties.name != 'nan')) { //集合中没有该点(Disease)
+								nodeSet2.push(item.n.identity)
+								nodes2.push({
+									id: item.n.identity,
+									cluster: group1_map.get(item.n.identity).cluster,
+									label: item.n.labels[0],
+									properties: item.n.properties,
+									edgePath: []
+								})
+							}
+						}
+
+						console.log(nodes2)
+
+						nodes1_map_by_cluster = d3.group(nodes2, d => d.cluster)
+						console.log(nodes1_map_by_cluster)
+
+						for (let item of graph_1) {
+							if (nodeSet1.indexOf(item.cluster) == -1) {
+								nodeSet1.push(item.cluster);
+								nodes1.push({
+									id: item.cluster,
+									cluster: item.cluster,
+									properties: "NAN"
+								})
+							}
+						}
+
+						draw_disease(0)
+
+						//释放内存
+						data1 = null
+						data2 = null
+					});
+
+				});
+
+
+                /**
+                 * 对已经按时间排序好的，nrm格式的json数组进行筛选处理
+                 * @method jsonSliceBegintoEnd
+                 * @param {beginDate,endDate} 我们要选定的开始和结束时间段
+                 * @return {list} 选中的部分片段数组
+                */
+                function jsonSliceBegintoEnd(edgeList, beginDate, endDate=-1){
+
+                    sliceList = []
+                    let temp_beginDate = '', temp_endDate = '';
+                    for(item of edgeList){
+                        /**
+                         * 对于不存在起始和结束时间的关系，我们默认其是一直持续的状态，比如城市隶属于省会的关系
+                         * 对于这类关系，首先做判断是否存在起始属性，若不存在则默认添加进去
+                        */
+                        if((item.r.properties).hasOwnProperty('beginDate')==false){
+                            sliceList.push(item)
+                            continue;
+                        }
+
+                        //开始和结束属性有3种情况，4位的年，6位年月，8位年月日，需分别处理
+                        temp_beginDate = String(item.r.properties.beginDate)
+                        temp_endDate = String(item.r.properties.endDate)
+                        if(temp_beginDate.length==8){}
+                        else if(temp_beginDate.length==6){
+                            temp_beginDate = temp_beginDate + '01'
+                        }else if(temp_endDate.length==4){
+                            temp_beginDate = temp_beginDate + '0101'
+                        }
+                        if(temp_endDate.length==8){}
+                        else if(temp_endDate.length==6){
+                            temp_endDate = temp_endDate + '01'
+                        }else if(temp_endDate.length==4){
+                            temp_endDate = temp_endDate + '0101'
+                        }
+                        
+                        //直接用字符串比较会出错，因此此步骤进行转换
+                        temp_beginDate = parseInt(temp_beginDate)
+                        temp_endDate = parseInt(temp_endDate)
+
+                        if(temp_beginDate<=beginDate){
+                            if(endDate == -1 && temp_endDate == '-1'){
+                                sliceList.push(item)
+                            }
+                            else if(temp_endDate !=-1 && temp_endDate >= endDate){
+                                sliceList.push(item)
+                            }else if(temp_endDate == -1){
+                                sliceList.push(item)
+                            }
+                        }
+                    }
+                    return sliceList
+                }
+
+                /**
+                 * 对已经按时间排序好的，nrm格式的json数组进行筛选处理，筛选出某一时刻的数据
+                 * @method jsonSliceTime 
+                 * @param {time} 我们要选定的某个特定时间节点（瞬间）
+                 * @return {list} 选中的部分片段数组
+                */
+                function jsonSliceTime(edgeList, time){
+                    sliceList = []
+                    let temp_beginDate = '', temp_endDate = '', temp_annDate = '', temp_foundDate = '', temp_delist_date = '';
+                    for(item of edgeList){
+                        /**
+                         * 对于不存在起始和结束时间的关系，我们默认其是一直持续的状态，比如城市隶属于省会的关系
+                         * 对于这类关系，首先做判断是否存在起始属性，若不存在则默认添加进去
+                        */
+                        if((item.r.properties).hasOwnProperty('beginDate')==false && (item.r.properties).hasOwnProperty('ann_date')==false ){
+                            if( (item.m.labels)[0] == "Fund"){
+                                
+                                //开始和结束属性有3种情况，4位的年，6位年月，8位年月日，需分别处理
+                                temp_beginDate = String(item.m.properties.found_date)
+                                temp_endDate = String(item.m.properties.delist_date)
+                                if(temp_beginDate.length==8){}
+                                else if(temp_beginDate.length==6){
+                                    temp_beginDate = temp_beginDate + '01'
+                                }else if(temp_endDate.length==4){
+                                    temp_beginDate = temp_beginDate + '0101'
+                                }
+                                if(temp_endDate.length==8){}
+                                else if(temp_endDate.length==6){
+                                    temp_endDate = temp_endDate + '01'
+                                }else if(temp_endDate.length==4){
+                                    temp_endDate = temp_endDate + '0101'
+                                }
+                            
+                                //直接用字符串比较会出错，因此此步骤进行转换
+                                temp_beginDate = parseInt(temp_beginDate)
+                                temp_endDate = parseInt(temp_endDate)
+                                //if(item.r.identity==92913){alert(item.m.identity);alert(temp_endDate)}
+
+                                if(temp_beginDate != -1 && temp_beginDate <= time){
+                                    //if(item.r.identity==92913){alert(item.m.identity)}
+                                    if(temp_endDate == '-1'){
+                                       //alert(item.m.identity)
+                                        //alert(temp_beginDate)
+                                        //alert(temp_endDate)
+                                        //if(item.r.identity==92913){alert(item.m.identity)}
+                                        sliceList.push(item)
+                                    }
+                                    else if(temp_endDate >= time){
+                                        
+                                        sliceList.push(item)
+                                    }
+                                }
+
+                            }else{
+                                sliceList.push(item)
+                                continue;
+                            }
+                        }
+                        else if((item.r.properties).hasOwnProperty('beginDate')==true){
+                            //开始和结束属性有3种情况，4位的年，6位年月，8位年月日，需分别处理
+                            temp_beginDate = String(item.r.properties.beginDate)
+                            temp_endDate = String(item.r.properties.endDate)
+                            if(temp_beginDate.length==8){}
+                            else if(temp_beginDate.length==6){
+                                temp_beginDate = temp_beginDate + '01'
+                            }else if(temp_endDate.length==4){
+                                temp_beginDate = temp_beginDate + '0101'
+                            }
+                            if(temp_endDate.length==8){}
+                            else if(temp_endDate.length==6){
+                                temp_endDate = temp_endDate + '01'
+                            }else if(temp_endDate.length==4){
+                                temp_endDate = temp_endDate + '0101'
+                            }
+                            
+                            //直接用字符串比较会出错，因此此步骤进行转换
+                            temp_beginDate = parseInt(temp_beginDate)
+                            temp_endDate = parseInt(temp_endDate)
+
+                            if(temp_beginDate <= time){
+                                if(temp_endDate == '-1'){
+                                    sliceList.push(item)
+                                }
+                                else if(temp_endDate >= time){
+                                    sliceList.push(item)
+                                }
+                            }
+                        }
+                        else if((item.r.properties).hasOwnProperty('ann_date')==true){
+
+                            /**
+                             * TODO
+                             * 疑似作者构建知识图谱的时候，公告日期ann_date和截止日期end_date属性标反了，这里将错就错，对换二者
+                            */
+
+                            //开始和结束属性有3种情况，4位的年，6位年月，8位年月日，需分别处理
+                            //注意！基金和公司的边关系中，属性名称是ann_date和end_date，和人与公司的边关系中属性不一样！
+                            temp_annDate = String(item.r.properties.end_date)
+                            temp_endDate = String(item.r.properties.ann_date)
+                            if(temp_annDate.length==8){}
+                            else if(temp_annDate.length==6){
+                                temp_annDate = temp_annDate + '01'
+                            }else if(temp_endDate.length==4){
+                                temp_annDate = temp_annDate + '0101'
+                            }
+                            if(temp_endDate.length==8){}
+                            else if(temp_endDate.length==6){
+                                temp_endDate = temp_endDate + '01'
+                            }else if(temp_endDate.length==4){
+                                temp_endDate = temp_endDate + '0101'
+                            }
+                            
+                            //直接用字符串比较会出错，因此此步骤进行转换
+                            temp_annDate = parseInt(temp_annDate)
+                            temp_endDate = parseInt(temp_endDate)
+                            //alert(temp_endDate)
+                            if(temp_annDate <= time){
+                                if(temp_endDate == '-1'){
+                                    sliceList.push(item)
+                                }
+                                else if(temp_endDate >= time){
+                                    //alert("大于time，放入")
+                                    sliceList.push(item)
+                                }
+                            }
+                        }
+                        else if((item.r.properties).hasOwnProperty('ann_date')==true){
+
+                            /**
+                             * TODO
+                             * 疑似作者构建知识图谱的时候，公告日期ann_date和截止日期end_date属性标反了，这里将错就错，对换二者
+                            */
+
+                            //开始和结束属性有3种情况，4位的年，6位年月，8位年月日，需分别处理
+                            //注意！基金和公司的边关系中，属性名称是ann_date和end_date，和人与公司的边关系中属性不一样！
+                            temp_annDate = String(item.r.properties.end_date)
+                            temp_endDate = String(item.r.properties.ann_date)
+                            if(temp_annDate.length==8){}
+                            else if(temp_annDate.length==6){
+                                temp_annDate = temp_annDate + '01'
+                            }else if(temp_endDate.length==4){
+                                temp_annDate = temp_annDate + '0101'
+                            }
+                            if(temp_endDate.length==8){}
+                            else if(temp_endDate.length==6){
+                                temp_endDate = temp_endDate + '01'
+                            }else if(temp_endDate.length==4){
+                                temp_endDate = temp_endDate + '0101'
+                            }
+                            
+                            //直接用字符串比较会出错，因此此步骤进行转换
+                            temp_annDate = parseInt(temp_annDate)
+                            temp_endDate = parseInt(temp_endDate)
+                            //alert(temp_endDate)
+                            if(temp_annDate <= time){
+                                if(temp_endDate == '-1'){
+                                    sliceList.push(item)
+                                }
+                                else if(temp_endDate >= time){
+                                    //alert("大于time，放入")
+                                    sliceList.push(item)
+                                }
+                            }
+                        }
+else if((item.r.properties).hasOwnProperty('ann_date')==true){
+
+                            /**
+                             * TODO
+                             * 疑似作者构建知识图谱的时候，公告日期ann_date和截止日期end_date属性标反了，这里将错就错，对换二者
+                            */
+
+                            //开始和结束属性有3种情况，4位的年，6位年月，8位年月日，需分别处理
+                            //注意！基金和公司的边关系中，属性名称是ann_date和end_date，和人与公司的边关系中属性不一样！
+                            temp_annDate = String(item.r.properties.end_date)
+                            temp_endDate = String(item.r.properties.ann_date)
+                            if(temp_annDate.length==8){}
+                            else if(temp_annDate.length==6){
+                                temp_annDate = temp_annDate + '01'
+                            }else if(temp_endDate.length==4){
+                                temp_annDate = temp_annDate + '0101'
+                            }
+                            if(temp_endDate.length==8){}
+                            else if(temp_endDate.length==6){
+                                temp_endDate = temp_endDate + '01'
+                            }else if(temp_endDate.length==4){
+                                temp_endDate = temp_endDate + '0101'
+                            }
+                            
+                            //直接用字符串比较会出错，因此此步骤进行转换
+                            temp_annDate = parseInt(temp_annDate)
+                            temp_endDate = parseInt(temp_endDate)
+                            //alert(temp_endDate)
+                            if(temp_annDate <= time){
+                                if(temp_endDate == '-1'){
+                                    sliceList.push(item)
+                                }
+                                else if(temp_endDate >= time){
+                                    //alert("大于time，放入")
+                                    sliceList.push(item)
+                                }
+                            }
+                        }
+                        
+
+                    }
+                    return sliceList
+                }
+
+
+				//第一个界面
+				function drawindex(nodes1) {
+					//清楚所有原先的点好线
+					svg2.selectAll("circle").remove()
+					svg2.selectAll("text").remove()
+
+
+					var node1 = svg1.append("g")
+						.attr("class", "nodes")
+						.selectAll("circle")
+						.data(nodes1)
+						.enter()
+						.append("circle")
+						.attr("r", 20)
+						.attr("fill", function (d) { //设置每个点的颜色,TODO	
+							let index = 0
+							return color[d.label];
+						})
+						.attr("stroke", "none")
+						.attr("name", function (d) {
+							return d.cluster;
+						})
+						.attr("id", d => d.id)
+						.call(drag(simulation1))
+						.on("click", function (event, d) {
+							console.log(d.cluster)
+							draw_disease(d.cluster)
+						});
+
+					var Text1 = svg1.append("g")
+						.attr("class", "text")
+						.selectAll("text")
+						.data(nodes1)
+						.enter()
+						.append("text")
+						.text(d => nodes1_map_by_cluster.get(d.cluster)[0].properties.name)
+
+					node1.append("title").text(d => d.cluster)
+
+					simulation1.nodes(nodes1).on("tick", ticked1);
+
+					function ticked1() {
+						node1.attr("transform", d => `translate(${d.x},${d.y})`);
+
+						Text1.attr("x", d => d.x - 10) //position of the lower left point of the text
+							.attr("y", d => d.y + 10); //position of the lowser left point of the text
+					}
+
+				}
+
+				//第二个界面
+				function draw_disease(cluster) {
+					//初始化
+					// svg1.selectAll('*').remove()
+
+					svg2.selectAll('*').remove()
+					nodes2_map_by_id_2 = null
+					console.log(nodes2_map_by_id_2)
+					links2 = [];
+					linkSet2 = [];
+					nodeSet2 = [];
+					nodes2 = [];
+
+					backgroudRect = svg2.append('g')
+					basemap = svg2.append('g'),
+						baselink = svg2.append('g'),
+						edgeBundle = svg2.append('g'),
+						baseNode = svg2.append('g'),
+						baseText = svg2.append('g'),
+						edgeText = svg2.append('g')
+					voronoi = svg2.append('g');
+
+					const hypotenuse = Math.sqrt(width2 * width2 + height2 * height2);
+					const scales = {
+						// used to scale nodes bubbles
+						nodes: d3.scaleSqrt()
+							.range([4, 36]),
+
+						// used to scale number of segments per line
+						segments: d3.scaleLinear()
+							.domain([0, hypotenuse])
+							.range([1, 10])
+					};
+
+					console.log(svg2)
+
+					//设置在背景上，用于交互作用
+					var backgroud = backgroudRect.insert("g", "#rects").append("rect")
+						.attr("width", width2)
+						.attr("height", height2)
+						.attr("fill", "#FFFFFF")
+
+					console.log(width2, height2)
+					console.log(backgroud)
+					console.log(cluster)
+					console.log(nodes1_map_by_cluster.get(cluster))
+					nodes2 = nodes1_map_by_cluster.get(cluster)	//获得这个聚类内的所有疾病点
+					console.log(nodes2)
+					let nodeNameset = []
+					nodes2.forEach(d => {
+						nodeNameset.push(d.properties.name)
+					})
+
+					//引入除疾病之外的的点
+					for (let item of graph_2) {//载入第二个界面的图
+						if ((nodeSet2.indexOf(item.m.identity) == -1) && (item.m.properties.name != 'nan')
+							&& (nodeNameset.indexOf(item.n.properties.name) != -1)
+						) { //集合中没有该点(尾部节点)
+							nodeSet2.push(item.m.identity)
+							nodes2.push({
+								id: item.m.identity,
+								label: item.m.labels[0],
+								properties: item.m.properties,
+								isShow: false,
+								edgePath: []
+							})
+						}
+					}
+
+					//将force的所有node 进行map()化
+					nodes2_map_by_id_2 = d3.index(nodes2, d => d.id)
+					console.log(nodes2_map_by_id_2)
+
+					for (let item of graph_2) { //处理边  
+						if ((linkSet2.indexOf(item.r.identity) == -1) && (nodes2_map_by_id_2.get(item.r.start) != undefined) && (nodes2_map_by_id_2.get(item.r.end) != undefined)) {//集合中原先存在空边
+							linkSet2.push(item.r.identity)
+							links2.push({
+								id: item.r.identity,
+								type: item.r.type,
+								source: item.r.start,
+								target: item.r.end,
+								properties: item.r.properties
+							})
+						}
+					}
+					console.log(links2)
+
+
+					var simulation2 = d3.forceSimulation()
+						.force("link", d3.forceLink().id(d => {
+							// console.log(d.id)
+							return d.id;
+						}
+						))
+						.force("center", d3.forceCenter(width2 / 2, height2 / 2).strength(1))
+						.force("collision", d3.forceCollide(15 + 10))//碰撞检测
+
+
+					//绘制线
+					console.log(baselink)
+					var link2 = baselink
+						.attr("class", "links")
+						.selectAll("line")
+						.data(links2)
+						.enter()
+						.append("line")
+						.attr("stroke", function (d) {
+							return color(nodes2_map_by_id_2.get(d.target).label);
+						})
+						.attr("stroke-width", function (d) {
+							// 每次访问links的一项数据
+							return 1 //所有线宽度均为2
+						})
+
+					svg2.append("defs").append("marker")
+						.attr("id", "arrow")
+						.attr("viewBox", "0 -5 10 10")
+						.data(links2)
+						.attr("refX", 20)
+						.attr("refY", 0)
+						.attr("opacity", 0.5)
+						.attr("markerWidth", 4)
+						.attr("markerHeight", 4)
+						.attr("orient", "auto")
+						.append("svg:path")
+						.attr("d", "M0,-5L10,0L0,5");
+
+
+					//生成点
+					var node2 = baseNode
+						.attr("class", "nodes")
+						.selectAll("circle")
+						.data(nodes2)
+						.enter()
+						.append("circle")
+						.attr("r", function (d) {
+
+							let size = 15
+
+							return size
+						})
+						.attr("fill", function (d) { //设置每个点的颜色
+
+							return color(d.label);
+						})
+						.attr("stroke", "none")
+						.attr("id", d => d.id)
+						.attr("name", d => d.properties.name)
+						.call(drag(simulation2))
+
+
+					var Text2 = baseText
+						.attr("class", "texts")
+						.selectAll("text")
+						.data(nodes2)
+						.enter()
+						.append("text")
+						// .text(d => d.properties.name)
+						.attr("font-size", () => 16)
+						.attr("text-anchor", "middle")
+						.attr("name", d => d.properties.name)
+						.attr('x', function (d) {
+							textBreaking(d3.select(this), d.properties.name)
+							return d.x;
+						})
+						.attr('y', d => d.y)
+						.call(drag(simulation2));
+
+
+					var linksName = edgeText
+						.attr("class", "labelText")
+						.selectAll("text")
+						.data(links2)
+						.enter()
+						.append("text")
+						// .join("text")
+						// .attr("class", "labelText text")
+						.style('text-anchor', 'middle')
+						// .style('font-size', '12px')
+						.text(d => d.properties.name)
+
+					console.log(linksName)
+
+					/**
+					 * 文本分隔（根据字数在当前选择器中分隔三行，超过10字省略）
+					 * @method nodeDegreeRank
+					 * @param {links} 文本对应的DOM对象
+					 * @return {nodeRank} 一维数组，每个数据为一个对象，第一个属性是节点id，第二个属性是每一个点的排名，长度为0-5 共6组，长度与links的类型相同
+					 */
+					function nodeDegreeRank(links) {
+						let counts = [];
+						let countsSet = [];
+						for (item of links) {//初始化
+							if (countsSet.indexOf(item.source) == -1) {	//不存在该点
+								countsSet.push(item.source)
+								counts.push({
+									source: item.source,
+									count: [0, 0, 0, 0, 0, 0,]
+								})
+							}
+						}
+						let sourceTocount = d3.index(counts, d => d.source)
+						for (item of links) {
+							// console.log(nodes2_map_by_id.get(item.target).label)
+							// console.log(sourceTocount.get(item.source))
+							switch (nodes2_map_by_id_2.get(item.target).label) { //获取该id对应点的label
+								//对不同的target存入对应数组项目, 共6个类别
+								case NodeLabels[1]: sourceTocount.get(item.source).count[0]++; break;
+								case NodeLabels[2]: sourceTocount.get(item.source).count[1]++; break;
+								case NodeLabels[3]: sourceTocount.get(item.source).count[2]++; break;
+								case NodeLabels[4]: sourceTocount.get(item.source).count[3]++; break;
+								case NodeLabels[5]: sourceTocount.get(item.source).count[4]++; break;
+								case NodeLabels[6]: sourceTocount.get(item.source).count[5]++; break;
+
+							}
+						}
+						console.log(counts)
+						let nodeRank = []
+						for (item of counts) {
+							let t = d3.rank(item.count)
+							let maxIndex = d3.maxIndex(t)
+							t[maxIndex] = -1 //trick
+							let seccondIndex = d3.maxIndex(t)
+							nodeRank.push({
+								source: item.source,
+								rank: d3.rank(item.count),
+								maxIndex: maxIndex,
+								secondIndex: seccondIndex
+							})
+						}
+						return nodeRank
+					}
+
+					var nodeRank = nodeDegreeRank(links2)
+					var SourceToNodeRank;
+					SourceToNodeRank = d3.index(nodeRank, d => d.source)
+					console.log(SourceToNodeRank)
+
+					//将点放置在力导向图中
+					simulation2.nodes(nodes2)
+
+					simulation2.force("link")
+						.links(links2)
+						.distance(d => {//设置每一条边的长度
+
+							let distance = 50;
+							let rank = SourceToNodeRank.get(d.source.id);
+							let maxIndex = rank.maxIndex;
+							let secondIndex = rank.secondIndex;
+							switch (d.type) {	//根据线的类型增加长度
+								case LinksType[0]: maxIndex == 0 ? distance += 100 : secondIndex == 0 ? distance += 50 : distance += 0; break;
+								case LinksType[1]: maxIndex == 1 ? distance += 100 : secondIndex == 1 ? distance += 50 : distance += 0; break;
+								case LinksType[2]: maxIndex == 2 ? distance += 100 : secondIndex == 2 ? distance += 50 : distance += 0; break;
+								case LinksType[3]: maxIndex == 3 ? distance += 100 : secondIndex == 3 ? distance += 50 : distance += 0; break;;
+								case LinksType[4]: maxIndex == 4 ? distance += 100 : secondIndex == 4 ? distance += 50 : distance += 0; break;
+								case LinksType[5]: maxIndex == 5 ? distance += 100 : secondIndex == 5 ? distance += 50 : distance += 0; break;
+								default: distance += 0; break;
+							}
+							return distance;
+						})
+						.strength()
+
+					// 默认参数-0.5
+					simulation2.force("force_Label", d3.force_Label().strength(-0.1));
+
+					simulation2.force("link_label", d3.linkStrenghLabel()
+						// .id(d => d.id)
+						// .links(links2)
+						.strength(1)
+					);
+
+					simulation2	//根据node的name的长度设置该点的电荷大小
+						.force("charge", d3.forceManyBody()
+							.strength(function (d) {
+								
+								return -200
+							}));
+					console.log(node2)
+
+
+					simulation2.on("tick", ticked2);
+					simulation2.alpha(1)
+					simulation2.restart()
+						.alphaMin(0.1)
+
+
+					function ticked2() {
+						
+						node2
+							.attr("cx", d => d.x)
+							.attr("cy", d => d.y)
+
+						link2
+							.attr("x1", function (d) {
+								return d.source.x;
+							})
+							.attr("y1", function (d) {
+								return d.source.y;
+							})
+							.attr("x2", function (d) {
+								return d.target.x;
+							})
+							.attr("y2", function (d) {
+								return d.target.y;
+							});
+
+
+						Text2.attr('transform', function (d) {
+							return 'translate(' + (d.x - 10) + ',' + (d.y + 10) + ')'
+						})
+
+						linksName
+							.attr('transform', d => {
+								let x = Math.min(d.source.x, d.target.x) + Math.abs(d.source.x - d.target.x) / 2
+								let y = Math.min(d.source.y, d.target.y) + Math.abs(d.source.y - d.target.y) / 2 - 1
+								// tanA = a / b
+								// A = arctan(tanA)
+								let tanA = Math.abs(d.source.y - d.target.y) / Math.abs(d.source.x - d.target.x)
+								let angle = Math.atan(tanA) / Math.PI * 180
+								// let angle = Math.atan2(1,1)/Math.PI*180
+								// console.log(angle)
+								// 第一、二象限额外处理
+								if (d.source.x > d.target.x) {
+									// 第二象限
+									if (d.source.y <= d.target.y) {
+										angle = -angle
+									}
+									// else {  // 第三象限
+									//   angle = angle
+									// }
+								} else if (d.source.y > d.target.y) {
+									// 第一象限
+									angle = -angle
+								}
+								return 'translate(' + x + ',' + y + ')' + 'rotate(' + angle + ')'
+							})
+					}
+
+
+					function drawEdgeBundel() {
+						let bundle = generateSegments(nodes2, links2);
+						console.log(bundle)
+						// https://github.com/d3/d3-shape#curveBundle
+
+						let line = d3.line()
+							.curve(d3.curveBundle)
+							.x(node => node.x)
+							.y(node => node.y);
+
+						var edge = edgeBundle
+							.attr("class", "edge")
+							.selectAll("path")
+							.data(bundle.paths)
+							.enter()
+							.append("path")
+							.attr("d", line)
+							.each(function (d) {
+								// makes it fast to select outgoing paths
+								d[0].edgePath.push(this);
+							})
+							.attr("fill", "none")
+							.attr("stroke", function (d) {
+								return color(d[d.length - 1].label);
+							})
+							.attr("name", function (d) {
+								let context = null;
+								// LinksType = ['HAS_DRUG', 'ALIAS_IS', 'DEPARTMENT_IS', 'HAS_SYMPTOM', "HAS_COMPLICATION", "PART_IS"];
+								switch (d[d.length - 1].label) { //对不同属性的点设置不同大小
+									case "Drug": context = "HAS_DRUG"; break;
+									case "Alias": context = "ALIAS_IS"; break;
+									case "Department": context = "DEPARTMENT_IS"; break;
+									case "Symptom": context = "HAS_SYMPTOM"; break;
+									case "Complication": context = "HAS_COMPLICATION"; break;
+									case "Part": context = "PART_IS"; break;
+								}
+								return context;
+							});
+
+						console.log(edge)
+
+						// https://github.com/d3/d3-force
+						let layout = d3.forceSimulation()
+							// settle at a layout faster
+							// .alpha(1)
+							.alphaDecay(0.1)
+							// nearby nodes attract each other
+							.force("charge", d3.forceManyBody()
+								.strength(40)
+								.distanceMax(scales.nodes.range()[1] * 2)
+							)
+							// edges want to be as short as possible
+							// prevents too much stretching
+							.force("link", d3.forceLink()
+								// .strength()
+								.distance(40)
+							)
+							// .on("tick", function (d) {
+							// 	edge.attr("d", line);
+							// })
+							// .on("tick",ticked3 )
+							.on("end", function (d) {
+
+								console.log("layout complete");
+
+							})
+						// .alphaMin(0.3)
+
+						layout.nodes(bundle.nodes).force("link").links(bundle.links);
+
+						node2.call(drag(layout))
+						Text2.call(drag(layout))
+						layout.on("tick", ticked3);
+
+
+						//移出原来的线
+						link2.remove()
+						d3.selectAll('.edge path').on("click", function (event) {
+							edgeInactiveOther(event)
+						});
+
+
+						function ticked3() {
+							// node2.attr("transform", d => `translate(${d.x},${d.y})`);
+							node2
+								.attr("cx", d => d.x)
+								.attr("cy", d => d.y)
+
+							edge.attr("d", line);
+
+							Text2.attr('transform', function (d) {
+								return 'translate(' + (d.x - 10) + ',' + (d.y + 10) + ')'
+							})
+
+
+							linksName
+								.attr('transform', d => {
+									let x = Math.min(d.source.x, d.target.x) + Math.abs(d.source.x - d.target.x) / 2
+									let y = Math.min(d.source.y, d.target.y) + Math.abs(d.source.y - d.target.y) / 2 - 1
+									// tanA = a / b
+									// A = arctan(tanA)
+									let tanA = Math.abs(d.source.y - d.target.y) / Math.abs(d.source.x - d.target.x)
+									let angle = Math.atan(tanA) / Math.PI * 180
+									// let angle = Math.atan2(1,1)/Math.PI*180
+									// console.log(angle)
+									// 第一、二象限额外处理
+									if (d.source.x > d.target.x) {
+										// 第二象限
+										if (d.source.y <= d.target.y) {
+											angle = -angle
+										}
+										// else {  // 第三象限
+										//   angle = angle
+										// }
+									} else if (d.source.y > d.target.y) {
+										// 第一象限
+										angle = -angle
+									}
+									return 'translate(' + x + ',' + y + ')' + 'rotate(' + angle + ')'
+								})
+
+						}
+
+
+					}
+
+
+
+
+					function generateSegments(nodes2, links2) {
+						// generate separate graph for edge bundling
+						// nodes: all nodes including control nodes
+						// links: all individual segments (source to target)
+						// paths: all segments combined into single path for drawing
+						let bundle = { nodes: [], links: [], paths: [] };
+
+						// make existing nodes fixed
+						bundle.nodes = nodes2.map(function (d, i) {
+							d.fx = d.x;
+							d.fy = d.y;
+							// d.fx = null;
+							// d.fy = null;
+							return d;
+						});
+
+						links2.forEach(function (d, i) {
+							// calculate the distance between the source and target
+							let length = distance(d.source, d.target);
+
+							// calculate total number of inner nodes for this link
+							let total = Math.round(scales.segments(length));
+							// create scales from source to target
+							let xscale = d3.scaleLinear()
+								.domain([0, total + 1]) // source, inner nodes, target
+								.range([d.source.x, d.target.x]);
+
+							let yscale = d3.scaleLinear()
+								.domain([0, total + 1])
+								.range([d.source.y, d.target.y]);
+
+							// initialize source node
+							let source = d.source;
+							let target = null;
+
+							// add all points to local path
+							let local = [source];
+
+							for (let j = 1; j <= total; j++) {
+								// calculate target node
+								target = {
+									x: xscale(j),
+									y: yscale(j),
+									label: d.properties.name
+
+								};
+
+								local.push(target);
+								bundle.nodes.push(target);
+
+								bundle.links.push({
+									source: source,
+									target: target,
+								});
+
+								source = target;
+							}
+							// console.log(d.target)
+							local.push(d.target);
+
+							// add last link to target node
+							bundle.links.push({
+								source: target,
+								target: d.target
+							});
+
+							bundle.paths.push(local);
+						});
+
+						return bundle;
+					}
+					function distance(source, target) {
+						const dx2 = Math.pow(target.x - source.x, 2);
+						const dy2 = Math.pow(target.y - source.y, 2);
+
+						return Math.sqrt(dx2 + dy2);
+					}
+
+					//显示鼠标选中节点的相应属性，
+					//为svg2 下的 nodes 中的circle元素绑定鼠标进入和移除事件
+					//鼠标进入时隐藏其他结点
+
+					// $('#svg2').on('mouseenter', '.nodes circle ', inactiveOther)
+					svg2.selectAll('.nodes circle').on("click", function (event) {
+						console.log($(this))
+						inactiveOther(event)
+					})
+
+					// $('#svg2').on('mouseenter', '.texts text ', inactiveOther)
+					svg2.selectAll('.texts text').on("click", function (event) {
+						inactiveOther(event)
+					})
+
+					//显示鼠标选中节点的相应属性，
+					//为svg2 下的 edge 中的path元素绑定鼠标进入和移除事件
+					//起到突出线段两侧的效果，并显示path属性
+					//鼠标进入时隐藏其他结点
+
+					// $('#svg2').on('mouseenter', '.labelText text', LabelTextInactiveOther)
+					svg2.selectAll('.labelText text').on("click", function (event) {
+						LabelTextInactiveOther(event)
+					});
+
+					//鼠标离开时显示其他结点
+					backgroud.on("click", function () {
+						inactiveOtherLeave(event)
+					})
+
+					function edgeInactiveOther(event) {
+						console.log(event)
+						dragging = false
+						//使用变量dragging，保证拖动鼠标的时候，其他状态不受影响
+						//鼠标没有拖动的时候处理事件
+						if (!dragging) {
+							//选取被选中元素的名字和id
+							console.log(event.path[0].__data__)
+
+							// if (($(this)[0].tagName) == "path") {
+							var Labelname = event.path[0].__data__[1].label;
+							var sourcename = event.path[0].__data__[0].properties.name;
+							var targetname = event.path[0].__data__[event.path[0].__data__.length - 1].properties.name;
+							// }
+
+							console.log(Labelname, sourcename, targetname)
+							//选择#svg2 .edge中所有的path，nodes 中的circle 改变class
+							d3.select('#svg2 .nodes').selectAll('circle').attr('class', function (d) {
+								//判断是否是当前节点，返回空
+								if (d.properties.name == sourcename || d.properties.name == targetname) {
+									return '';
+								}
+								else {
+									//其余所有节点透明显示
+									return "inactive"; //前面CSS定义 .nodes circle.inactive
+								}
+							})
+
+							//处理所有的文字，对其进行透明度处理
+							d3.select('#svg2').selectAll('text').attr('class', function (d) {
+								//判断是否是当前节点，返回空
+								if (d.properties.name == sourcename || d.properties.name == targetname || (d.properties.name == Labelname && d.target.properties.name == targetname)) {
+									return '';
+								}
+								//当前节点返回空，否则其他节点循环判断是否被隐藏起来(CSS设置隐藏)
+								else {
+									return "inactive"; //前面CSS定义 .nodes circle.inactive
+								}
+							})
+							//处理相邻的边line是否隐藏 注意 && 
+							d3.select("#svg2 .edge").selectAll('path').attr('class', function (d) {
+								if (d[0].properties.name == sourcename && d[d.length - 1].properties.name == targetname) {
+									return '';
+								} else {
+									return 'inactive';
+								}
+							});
+
+						}
+					}
+
+					function LabelTextInactiveOther(event) {
+						console.log(event)
+						dragging = false
+						//使用变量dragging，保证拖动鼠标的时候，其他状态不受影响
+						//鼠标没有拖动的时候处理事件
+						if (!dragging) {
+							//选取被选中元素的名字和id
+							var Labelname = event.path[0].__data__.properties.name;
+							var sourcename = event.path[0].__data__.source.properties.name;
+							var targetname = event.path[0].__data__.target.properties.name;
+
+							console.log(Labelname, sourcename, targetname)
+							//选择#svg2 .edge中所有的path，nodes 中的circle 改变class
+							d3.select('#svg2 .nodes').selectAll('circle').attr('class', function (d) {
+								//判断是否是当前节点，返回空
+								for (let item of links2) {
+									if (item.properties.name == Labelname && (item.source.properties.name == d.properties.name || item.target.properties.name == d.properties.name)) {
+										return '';
+									}
+								}
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+
+							})
+
+							//处理所有的文字，对其进行透明度处理
+							d3.select('#svg2').selectAll('text').attr('class', function (d) {
+								//判断是否是当前节点，返回空
+								for (let item of links2) {
+									if (item.properties.name == Labelname && (item.source.properties.name == d.properties.name || item.target.properties.name == d.properties.name)) {
+										return '';
+									}
+								}
+								return "inactive";
+
+							})
+							//处理相邻的边line是否隐藏 注意 && 
+							d3.select("#svg2 .edge").selectAll('path').attr('class', function (d) {
+								if (d[1].label == Labelname) {
+									return '';
+								}
+								else {
+									return "inactive";
+								}
+
+							});
+
+							d3.select("#svg2 .labelText").selectAll('text').attr('class', function (d) {
+								if (d.properties.name == Labelname) {
+									return '';
+								}
+								else {
+									return "inactive";
+								}
+
+							});
+						}
+					}
+
+					function inactiveOtherLeave(event) {
+						d3.select('#svg2 .nodes').selectAll('circle').attr('class', function (d) {
+							d.isShow = false;
+							return '';
+						});
+						// d3.select('#svg2 .links').selectAll('line').attr('class', '');
+						d3.select('#svg2 .texts').selectAll('text').attr('class', function (d) {
+							d.isShow = false;
+							return '';
+						});
+						d3.select('#svg2 .links').selectAll('line').attr('class', function (d) {
+							d.isShow = false;
+							return '';
+						});
+						d3.select('#svg2 .edge').selectAll('path').attr('class', function (d) {
+							d.isShow = false;
+							return '';
+						});
+						d3.select('#svg2 .labelText').selectAll('text').attr('class', function (d) {
+							d.isShow = false;
+							return '';
+						});
+
+						// d3.select('#svg2').selectAll('*').attr("class",function(d){
+						// 	d.isShow = false;
+						// 	return '';
+						// })
+
+					};
+
+					function drag(simulation) {
+						// simulation2.nodes().forEach(function (d, i) {
+						// 	d.fx = null;
+						// 	d.fy = null;
+						// })
+						function dragsubject(event) {
+							return simulation.find(event.x, event.y);
+						}
+
+						function dragstarted(event) {
+							if (!event.active) simulation.alphaTarget(0.3).restart();
+							event.subject.fx = event.subject.x;
+							event.subject.fy = event.subject.y;
+						}
+
+						function dragged(event) {
+							event.subject.fx = event.x;
+							event.subject.fy = event.y;
+						}
+
+						function dragended(event) {
+							if (!event.active) simulation.alphaTarget(0);
+							// 注释以下代码，使拖动结束后固定节点
+							// event.subject.fx = null;
+							// event.subject.fy = null;
+
+							// simulation2.nodes().forEach(function (d, i) {
+							// 	d.fx = d.x;
+							// 	d.fy = d.y;
+							// })
+						}
+
+						return d3.drag()
+							.subject(dragsubject)
+							.on("start", dragstarted)
+							.on("drag", dragged)
+							.on("end", dragended)
+					}
+
+				}
+
+				function inactiveOther(event) {
+					console.log(event)
+					dragging = false
+					//使用变量dragging，保证拖动鼠标的时候，其他状态不受影响
+					//鼠标没有拖动的时候处理事件
+					if (!dragging) {
+						//选取被选中元素的名字和id
+						var name = event.path[0].__data__.properties.name;
+						var id = event.path[0].__data__.id;
+						console.log(name)
+						//设置#info h4 样式的颜色作为节点的颜色，文本为name
+						//$(this).attr('fill')表示当前悬浮圆的填充色
+						console.log(event.path)
+						console.log(color(event.path[0].__data__.label))
+
+						$('#info h4').css('color', color(event.path[0].__data__.label))
+							.text(name);
+						//将上次增加的数去移去，否则信息会不断增加
+						$('#info p').remove();
+						//遍历查找id对应的属性,可以尝试map方法
+						for (let item of nodes2) {
+							if (item.id == id) {
+								for (var key in item.properties)
+									//显示值及其字段名字
+									$('#info').append('<p><span>' + key + '</span>' + item.properties[key] + '</p>')
+							}
+						}
+						//选择#svg2 .nodes中所有的circle，再增加个class
+						d3.select('#svg2 .nodes').selectAll('circle').attr('class', function (d) {
+							//判断是否是当前节点，返回空
+							if (d.properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							//当前节点返回空，否则其他节点循环判断是否被隐藏起来(CSS设置隐藏)
+							else {
+								//links链接的起始节点进行判断,如果其id等于name则显示这类节点
+								//注意: graph=data
+								for (var i = 0; i < links2.length; i++) {
+									//如果links的起点等于name。并且终点等于正在处理的则显示出来
+									if (links2[i]['source'].properties.name == name && links2[i]['target'].id == d.id) {
+										d.isShow = true;
+										// return '';
+									}
+									if (links2[i]['target'].properties.name == name && links2[i]['source'].id == d.id) {
+										d.isShow = true;
+										// return '';
+									}
+								}
+								//其余所有节点透明显示
+								if (d.isShow == true) {
+									return '';
+								}
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+							}
+						})
+						//处理所有的文字，对其进行透明度处理
+						d3.select('#svg2').selectAll('text').attr('class', function (d) {
+							//判断是否是当前节点，返回空
+							if (d.properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							//当前节点返回空，否则其他节点循环判断是否被隐藏起来(CSS设置隐藏)
+							else {
+								//links链接的起始节点进行判断,如果其id等于name则显示这类节点
+								//注意: graph=data
+								for (var i = 0; i < links2.length; i++) {
+									//如果links的起点等于name。并且终点等于正在处理的则显示出来
+									if (links2[i]['source'].properties.name == name && links2[i]['target'].id == d.id) {
+										d.isShow = true;
+										// return '';
+									}
+									if (links2[i]['target'].properties.name == name && links2[i]['source'].id == d.id) {
+										d.isShow = true;
+										// return '';
+									}
+								}
+								//其余所有text透明显示
+								if (d.isShow == true) {
+									return '';
+								}
+								else {
+									return "inactive"; //前面CSS定义 .nodes circle.inactive
+								}
+							}
+						})
+						//处理所有的文字，对其进行透明度处理
+						// d3.select('#svg2 .labelText').selectAll('text').attr('class', '');
+						d3.select("#svg2 .labelText").selectAll('text').attr('class', function (d) {
+							if (d.source.properties.name == name || d.target.properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							if (d.isShow == true) {
+								return '';
+							}
+							else {
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+							}
+						});
+						//处
+						//处理相邻的边line是否隐藏 注意 || 
+						d3.select("#svg2 .links").selectAll('line').attr('class', function (d) {
+							if (d.source.properties.name == name || d.target.properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							if (d.isShow == true) {
+								return '';
+							}
+							else {
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+							}
+						});
+						//处理相邻的边edge是否隐藏 注意 || 
+						d3.select("#svg2 .edge").selectAll('path').attr('class', function (d) {
+							// console.log(d)
+							if (d[0].properties.name == name || d[d.length - 1].properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							if (d.isShow == true) {
+								return '';
+							}
+							else {
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+							}
+
+						});
+					}
+				}
+
+				$('#search1 input').keypress(function (event) {
+					//如果input是空的话，显示所有的点和线
+					if ($(this).val() == '') {//搜索框是空的
+						d3.select('#svg1 .texts').selectAll('text').attr('class', '')
+						d3.select('#svg1 .nodes').selectAll('circle').attr('class', '')
+						d3.select('#svg1 .links').selectAll('line').attr('class', '')
+					}
+
+					else { 					//input 有 name 值，在group1中寻找该值等于就显示该值
+						// if (d.properties.name.indexOf(name) >= 0) {
+						var name = $(this).val();
+						console.log(name)
+						if (graph_1_by_name.get(name) != undefined) {
+							console.log(graph_1_by_name.get(name))
+							draw_disease(graph_1_by_name.get(name)[0].cluster)
+						}
+					}
+				})
+
+
+				$('#search2 input').keypress(function (event) {
+					//如果input是空的话，显示所有的点和线
+					if ($(this).val() == '') {//搜索框是空的
+						d3.select('#svg2 .texts').selectAll('text').attr('class', '')
+						d3.select('#svg2 .nodes').selectAll('circle').attr('class', '')
+						d3.select('#svg2 .links').selectAll('line').attr('class', '')
+					}
+					//否则判断三个元素是否等于name 值，等于就显示该值
+					else {
+						var name = $(this).val();
+						console.log(name)
+						//搜索所有的节点
+						//选择#svg2 .nodes中所有的circle，再增加个class
+						d3.select('#svg2 .nodes').selectAll('circle').attr('class', function (d) {
+							//判断是否是当前节点，返回空
+							if (d.properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							//当前节点返回空，否则其他节点循环判断是否被隐藏起来(CSS设置隐藏)
+							else {
+								//links链接的起始节点进行判断,如果其id等于name则显示这类节点
+								//注意: graph=data
+								for (var i = 0; i < links2.length; i++) {
+									//如果links的起点等于name。并且终点等于正在处理的则显示出来
+									if (links2[i]['source'].properties.name == name && links2[i]['target'].id == d.id) {
+										d.isShow = true;
+										// return '';
+									}
+									if (links2[i]['target'].properties.name == name && links2[i]['source'].id == d.id) {
+										d.isShow = true;
+										// return '';
+									}
+								}
+								//其余所有节点透明显示
+								if (d.isShow == true) {
+									return '';
+								}
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+							}
+						})
+						//处理所有的文字，对其进行透明度处理
+						d3.select('#svg2').selectAll('text').attr('class', function (d) {
+							//判断是否是当前节点，返回空
+							if (d.properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							//当前节点返回空，否则其他节点循环判断是否被隐藏起来(CSS设置隐藏)
+							else {
+								//links链接的起始节点进行判断,如果其id等于name则显示这类节点
+								//注意: graph=data
+								for (var i = 0; i < links2.length; i++) {
+									//如果links的起点等于name。并且终点等于正在处理的则显示出来
+									if (links2[i]['source'].properties.name == name && links2[i]['target'].id == d.id) {
+										d.isShow = true;
+										// return '';
+									}
+									if (links2[i]['target'].properties.name == name && links2[i]['source'].id == d.id) {
+										d.isShow = true;
+										// return '';
+									}
+								}
+								//其余所有text透明显示
+								if (d.isShow == true) {
+									return '';
+								}
+								else {
+									return "inactive"; //前面CSS定义 .nodes circle.inactive
+								}
+							}
+						})
+						//处理所有的文字，对其进行透明度处理
+						// d3.select('#svg2 .labelText').selectAll('text').attr('class', '');
+						d3.select("#svg2 .labelText").selectAll('text').attr('class', function (d) {
+							if (d.source.properties.name == name || d.target.properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							if (d.isShow == true) {
+								return '';
+							}
+							else {
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+							}
+						});
+						//处
+						//处理相邻的边line是否隐藏 注意 || 
+						d3.select("#svg2 .links").selectAll('line').attr('class', function (d) {
+							if (d.source.properties.name == name || d.target.properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							if (d.isShow == true) {
+								return '';
+							}
+							else {
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+							}
+						});
+						//处理相邻的边edge是否隐藏 注意 || 
+						d3.select("#svg2 .edge").selectAll('path').attr('class', function (d) {
+							// console.log(d)
+							if (d[0].properties.name == name || d[d.length - 1].properties.name == name) {
+								d.isShow = true;
+								// return '';
+							}
+							if (d.isShow == true) {
+								return '';
+							}
+							else {
+								return "inactive"; //前面CSS定义 .nodes circle.inactive
+							}
+
+						});
+
+					}
+				})
+
+
+
+				function textBreaking(d3text, text) {
+					const len = text.length
+					if (len <= 3) {
+						d3text.append('tspan')
+							.attr("text-anchor", "middle")
+							.attr('x', 8)
+							.attr('y', -4)
+							.text(text)
+					} else if (len == 4) {
+						let topText = text.substring(0, 2)
+						let midText = text.substring(2, 5)
+						d3text.append('tspan')
+							.attr('x', 8)
+							.attr('y', -12)
+							.text(function () {
+								return topText
+							})
+						d3text.append('tspan')
+							.attr('x', 8)
+							.attr('y', 4)
+							.text(function () {
+								return midText
+							})
+					}
+					else {
+						let topText = text.substring(0, 3)
+						let midText = text.substring(3, 7)
+						let botText = text.substring(7, len)
+						let topY = -16
+						let midY = 0
+						let botY = 16
+						let x = 8
+						if (len <= 7) {
+							topY += 5
+							midY += 5
+						} else if (len > 10) {
+							botText = text.substring(7, 9) + '...'
+						}
+
+						d3text.text('')
+						d3text.append('tspan')
+							.attr('x', x)
+							.attr('y', topY)
+							.text(function () {
+								return topText
+							})
+						d3text.append('tspan')
+							.attr('x', x)
+							.attr('y', midY)
+							.text(function () {
+								return midText
+							})
+						d3text.append('tspan')
+							.attr('x', x)
+							.attr('y', botY)
+							.text(function () {
+								return botText
+							})
+					}
+				}
+			});
+		</script>
+</body>
+
+</html>
